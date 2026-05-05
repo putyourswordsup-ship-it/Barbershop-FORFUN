@@ -13,7 +13,12 @@ from telegram.ext import (
     filters,
 )
 
-TOKEN = "8581581631:AAFT8j-_yVIO9myGxiWUF5d40rz3t-K_vkY"
+import os
+
+TOKEN = os.getenv("TOKEN")
+
+if not TOKEN:
+    TOKEN = "8581581631:AAHrWbATdQImh6svUHfikwVeKVK9pCXZBWs"
 ADMIN_IDS = [1288830602]
 ADMIN_PASSWORD = "1234"
 
