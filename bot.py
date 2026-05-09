@@ -1,7 +1,11 @@
+import os
+import threading
 import sqlite3
 import asyncio
 from datetime import datetime, timedelta
 from collections import Counter
+
+from flask import Flask
 
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
@@ -13,12 +17,8 @@ from telegram.ext import (
     filters,
 )
 
-import os
-
 TOKEN = os.getenv("TOKEN")
 
-if not TOKEN:
-    TOKEN = "8581581631:AAHrWbATdQImh6svUHfikwVeKVK9pCXZBWs"
 ADMIN_IDS = [1288830602]
 ADMIN_PASSWORD = "1234"
 
@@ -178,8 +178,10 @@ def get_free_times(master, day, exclude_id=None):
     busy = []
     for record in records:
         record_id, _, _, _, rec_master, rec_day, rec_time = record
+
         if exclude_id is not None and record_id == exclude_id:
             continue
+
         if rec_master == master and rec_day == day:
             busy.append(rec_time)
 
@@ -191,40 +193,68 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if is_admin(user_id):
         if is_admin_logged(context):
-            await update.message.reply_text("⚙️ Админ панель:", reply_markup=admin_kb())
+            await update.message.reply_text(
+                "⚙️ Админ панель:",
+                reply_markup=admin_kb()
+            )
         else:
             context.user_data["waiting_password"] = True
-            await update.message.reply_text("Введите пароль админа:", reply_markup=ReplyKeyboardRemove())
+            await update.message.reply_text(
+                "Введите пароль админа:",
+                reply_markup=ReplyKeyboardRemove()
+            )
+
         return ConversationHandler.END
 
-    await update.message.reply_text("Привет! Выбери действие:", reply_markup=main_menu_kb())
+    await update.message.reply_text(
+        "Привет! Выбери действие:",
+        reply_markup=main_menu_kb()
+    )
+
     return ConversationHandler.END
 
 
 async def begin_booking(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
-    await update.message.reply_text("Как тебя зовут?", reply_markup=back_kb([]))
+
+    await update.message.reply_text(
+        "Как тебя зовут?",
+        reply_markup=back_kb([])
+    )
+
     return NAME
 
 
 async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.text == "⬅️ Назад":
-        await update.message.reply_text("Главное меню:", reply_markup=main_menu_kb())
+        await update.message.reply_text(
+            "Главное меню:",
+            reply_markup=main_menu_kb()
+        )
         return ConversationHandler.END
 
     context.user_data["name"] = update.message.text
 
     keyboard = [[s] for s in SERVICES.keys()]
-    await update.message.reply_text("Выбери услугу:", reply_markup=back_kb(keyboard))
+
+    await update.message.reply_text(
+        "Выбери услугу:",
+        reply_markup=back_kb(keyboard)
+    )
+
     return SERVICE
 
 
 async def get_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.text == "⬅️ Назад":
-        await update.message.reply_text("Как тебя зовут?", reply_markup=back_kb([]))
+        await update.message.reply_text(
+            "Как тебя зовут?",
+            reply_markup=back_kb([])
+        )
         return NAME
 
     service = update.message.text
+
     if service not in SERVICES:
         await update.message.reply_text("Выбери услугу кнопкой.")
         return SERVICE
@@ -232,20 +262,28 @@ async def get_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["service"] = service
 
     keyboard = [[m] for m in MASTER_SCHEDULE.keys()]
+
     await update.message.reply_text(
-        f"Услуга: {service}\nЦена/длительность: {SERVICES[service]}\n\nВыбери мастера:",
+        f"Услуга: {service}\n"
+        f"Цена/длительность: {SERVICES[service]}\n\n"
+        f"Выбери мастера:",
         reply_markup=back_kb(keyboard)
     )
+
     return MASTER
 
 
 async def get_master(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.text == "⬅️ Назад":
         keyboard = [[s] for s in SERVICES.keys()]
-        await update.message.reply_text("Выбери услугу:", reply_markup=back_kb(keyboard))
+        await update.message.reply_text(
+            "Выбери услугу:",
+            reply_markup=back_kb(keyboard)
+        )
         return SERVICE
 
     master = update.message.text
+
     if master not in MASTER_SCHEDULE:
         await update.message.reply_text("Выбери мастера кнопкой.")
         return MASTER
@@ -255,14 +293,21 @@ async def get_master(update: Update, context: ContextTypes.DEFAULT_TYPE):
     days = list(MASTER_SCHEDULE[master].keys())
     keyboard = [[d] for d in days]
 
-    await update.message.reply_text("Выбери день:", reply_markup=back_kb(keyboard))
+    await update.message.reply_text(
+        "Выбери день:",
+        reply_markup=back_kb(keyboard)
+    )
+
     return DAY
 
 
 async def get_day(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.text == "⬅️ Назад":
         keyboard = [[m] for m in MASTER_SCHEDULE.keys()]
-        await update.message.reply_text("Выбери мастера:", reply_markup=back_kb(keyboard))
+        await update.message.reply_text(
+            "Выбери мастера:",
+            reply_markup=back_kb(keyboard)
+        )
         return MASTER
 
     day = update.message.text
@@ -273,6 +318,7 @@ async def get_day(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return DAY
 
     context.user_data["day"] = day
+
     free_times = get_free_times(master, day)
 
     if not free_times:
@@ -280,7 +326,12 @@ async def get_day(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return DAY
 
     keyboard = [[t] for t in free_times]
-    await update.message.reply_text("Выбери свободное время:", reply_markup=back_kb(keyboard))
+
+    await update.message.reply_text(
+        "Выбери свободное время:",
+        reply_markup=back_kb(keyboard)
+    )
+
     return TIME
 
 
@@ -289,7 +340,12 @@ async def get_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
         master = context.user_data["master"]
         days = list(MASTER_SCHEDULE[master].keys())
         keyboard = [[d] for d in days]
-        await update.message.reply_text("Выбери день:", reply_markup=back_kb(keyboard))
+
+        await update.message.reply_text(
+            "Выбери день:",
+            reply_markup=back_kb(keyboard)
+        )
+
         return DAY
 
     time = update.message.text
@@ -315,8 +371,13 @@ async def get_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"День: {day}\n"
         f"Время: {time}\n\n"
         f"Подтверждаем?",
-        reply_markup=kb([["✅ Подтвердить"], ["⬅️ Назад"], ["❌ Отменить"]])
+        reply_markup=kb([
+            ["✅ Подтвердить"],
+            ["⬅️ Назад"],
+            ["❌ Отменить"]
+        ])
     )
+
     return CONFIRM
 
 
@@ -326,14 +387,15 @@ async def confirm_booking(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "⬅️ Назад":
         master = context.user_data["master"]
         day = context.user_data["day"]
-        free_times = get_free_times(master, day)
 
+        free_times = get_free_times(master, day)
         keyboard = [[t] for t in free_times]
 
         await update.message.reply_text(
             "Выбери свободное время:",
             reply_markup=back_kb(keyboard)
         )
+
         return TIME
 
     if text == "❌ Отменить":
@@ -341,6 +403,7 @@ async def confirm_booking(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Запись отменена.",
             reply_markup=main_menu_kb()
         )
+
         return ConversationHandler.END
 
     if text != "✅ Подтвердить":
@@ -377,7 +440,6 @@ async def confirm_booking(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu_kb()
     )
 
-    # Напоминание за 1 час до записи
     day = data["day"]
     time_str = data["time"]
 
@@ -439,7 +501,10 @@ async def show_my_records(update: Update, context: ContextTypes.DEFAULT_TYPE):
     records = get_user_records(user_id)
 
     if not records:
-        await update.message.reply_text("У тебя пока нет записей.", reply_markup=main_menu_kb())
+        await update.message.reply_text(
+            "У тебя пока нет записей.",
+            reply_markup=main_menu_kb()
+        )
         return
 
     message = "📋 Твои записи:\n\n"
@@ -447,12 +512,16 @@ async def show_my_records(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     for record in records:
         record_id, _, name, service, master, day, time = record
+
         message += f"{record_id}. {service} | {master} | {day} | {time}\n"
         keyboard.append([f"🔁 Перенести {record_id}"])
 
     keyboard.append(["⬅️ Назад"])
 
-    await update.message.reply_text(message, reply_markup=kb(keyboard))
+    await update.message.reply_text(
+        message,
+        reply_markup=kb(keyboard)
+    )
 
 
 async def start_reschedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -478,9 +547,11 @@ async def start_reschedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[d] for d in days]
 
     await update.message.reply_text(
-        f"Перенос записи №{record_id}\nВыбери новый день:",
+        f"Перенос записи №{record_id}\n"
+        f"Выбери новый день:",
         reply_markup=back_kb(keyboard)
     )
+
     return RESCHEDULE_DAY
 
 
@@ -497,6 +568,7 @@ async def reschedule_day(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return RESCHEDULE_DAY
 
     context.user_data["reschedule_day"] = day
+
     record_id = context.user_data["reschedule_id"]
     free_times = get_free_times(master, day, exclude_id=record_id)
 
@@ -506,7 +578,11 @@ async def reschedule_day(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [[t] for t in free_times]
 
-    await update.message.reply_text("Выбери новое время:", reply_markup=back_kb(keyboard))
+    await update.message.reply_text(
+        "Выбери новое время:",
+        reply_markup=back_kb(keyboard)
+    )
+
     return RESCHEDULE_TIME
 
 
@@ -515,10 +591,16 @@ async def reschedule_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
         master = context.user_data["reschedule_master"]
         days = list(MASTER_SCHEDULE[master].keys())
         keyboard = [[d] for d in days]
-        await update.message.reply_text("Выбери новый день:", reply_markup=back_kb(keyboard))
+
+        await update.message.reply_text(
+            "Выбери новый день:",
+            reply_markup=back_kb(keyboard)
+        )
+
         return RESCHEDULE_DAY
 
     time = update.message.text
+
     record_id = context.user_data["reschedule_id"]
     day = context.user_data["reschedule_day"]
     master = context.user_data["reschedule_master"]
@@ -532,9 +614,12 @@ async def reschedule_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     update_record_time(record_id, day, time)
 
     await update.message.reply_text(
-        f"✅ Запись перенесена!\n\nНовый день: {day}\nНовое время: {time}",
+        f"✅ Запись перенесена!\n\n"
+        f"Новый день: {day}\n"
+        f"Новое время: {time}",
         reply_markup=main_menu_kb()
     )
+
     return ConversationHandler.END
 
 
@@ -546,9 +631,14 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text == ADMIN_PASSWORD:
             context.user_data["admin_logged"] = True
             context.user_data["waiting_password"] = False
-            await update.message.reply_text("✅ Админ панель открыта:", reply_markup=admin_kb())
+
+            await update.message.reply_text(
+                "✅ Админ панель открыта:",
+                reply_markup=admin_kb()
+            )
         else:
             await update.message.reply_text("❌ Неверный пароль.")
+
         return
 
     if not is_admin(user_id) or not is_admin_logged(context):
@@ -558,19 +648,29 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == "📋 Список записей":
         if not records:
-            await update.message.reply_text("Записей нет.", reply_markup=admin_kb())
+            await update.message.reply_text(
+                "Записей нет.",
+                reply_markup=admin_kb()
+            )
             return
 
         message = "📋 Все записи:\n\n"
+
         for r in records:
             record_id, _, name, service, master, day, time = r
             message += f"{record_id}. {name} | {service} | {master} | {day} | {time}\n"
 
-        await update.message.reply_text(message, reply_markup=admin_kb())
+        await update.message.reply_text(
+            message,
+            reply_markup=admin_kb()
+        )
 
     elif text == "📊 Статистика":
         if not records:
-            await update.message.reply_text("Статистики пока нет.", reply_markup=admin_kb())
+            await update.message.reply_text(
+                "Статистики пока нет.",
+                reply_markup=admin_kb()
+            )
             return
 
         services = Counter(r[3] for r in records)
@@ -580,75 +680,136 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message = f"📊 Статистика:\n\nВсего записей: {len(records)}\n\n"
 
         message += "По услугам:\n"
-        for k, v in services.items():
-            message += f"- {k}: {v}\n"
+        for service, count in services.items():
+            message += f"- {service}: {count}\n"
 
         message += "\nПо мастерам:\n"
-        for k, v in masters.items():
-            message += f"- {k}: {v}\n"
+        for master, count in masters.items():
+            message += f"- {master}: {count}\n"
 
         message += "\nПо дням:\n"
-        for k, v in days.items():
-            message += f"- {k}: {v}\n"
+        for day, count in days.items():
+            message += f"- {day}: {count}\n"
 
-        await update.message.reply_text(message, reply_markup=admin_kb())
+        await update.message.reply_text(
+            message,
+            reply_markup=admin_kb()
+        )
 
     elif text == "🕒 Занятые слоты":
         if not records:
-            await update.message.reply_text("Занятых слотов нет.", reply_markup=admin_kb())
+            await update.message.reply_text(
+                "Занятых слотов нет.",
+                reply_markup=admin_kb()
+            )
             return
 
         message = "🕒 Занятые слоты:\n\n"
+
         for r in records:
             record_id, _, name, service, master, day, time = r
             message += f"{record_id}. {master} — {day} {time} ({service})\n"
 
-        await update.message.reply_text(message, reply_markup=admin_kb())
+        await update.message.reply_text(
+            message,
+            reply_markup=admin_kb()
+        )
 
     elif text == "❌ Удалить запись":
         if not records:
-            await update.message.reply_text("Записей нет.", reply_markup=admin_kb())
+            await update.message.reply_text(
+                "Записей нет.",
+                reply_markup=admin_kb()
+            )
             return
 
         keyboard = [[f"❌ Удалить {r[0]}"] for r in records]
         keyboard.append(["⬅️ Назад"])
 
-        await update.message.reply_text("Выбери запись для удаления:", reply_markup=kb(keyboard))
+        await update.message.reply_text(
+            "Выбери запись для удаления:",
+            reply_markup=kb(keyboard)
+        )
 
     elif text.startswith("❌ Удалить "):
         try:
             record_id = int(text.split()[-1])
         except ValueError:
-            await update.message.reply_text("Ошибка удаления.", reply_markup=admin_kb())
+            await update.message.reply_text(
+                "Ошибка удаления.",
+                reply_markup=admin_kb()
+            )
             return
 
         delete_record(record_id)
-        await update.message.reply_text("✅ Запись удалена.", reply_markup=admin_kb())
+
+        await update.message.reply_text(
+            "✅ Запись удалена.",
+            reply_markup=admin_kb()
+        )
 
     elif text == "🧹 Очистить все":
         clear_records()
-        await update.message.reply_text("🧹 Все записи удалены.", reply_markup=admin_kb())
+
+        await update.message.reply_text(
+            "🧹 Все записи удалены.",
+            reply_markup=admin_kb()
+        )
 
     elif text == "⬅️ Назад":
-        await update.message.reply_text("⚙️ Админ панель:", reply_markup=admin_kb())
+        await update.message.reply_text(
+            "⚙️ Админ панель:",
+            reply_markup=admin_kb()
+        )
 
     elif text == "🚪 Выйти из админки":
         context.user_data["admin_logged"] = False
-        await update.message.reply_text("Ты вышел из админки.", reply_markup=ReplyKeyboardRemove())
+
+        await update.message.reply_text(
+            "Ты вышел из админки.",
+            reply_markup=ReplyKeyboardRemove()
+        )
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Действие отменено.", reply_markup=main_menu_kb())
+    await update.message.reply_text(
+        "Действие отменено.",
+        reply_markup=main_menu_kb()
+    )
+
     return ConversationHandler.END
 
 
+web_app = Flask(__name__)
+
+
+@web_app.route("/")
+def home():
+    return "Bot is running"
+
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    web_app.run(host="0.0.0.0", port=port)
+
+
 def main():
+    if not TOKEN:
+        raise RuntimeError("TOKEN is missing. Add TOKEN in Render Environment Variables.")
+
     init_db()
+
+    threading.Thread(
+        target=run_web,
+        daemon=True
+    ).start()
 
     app = ApplicationBuilder().token(TOKEN).build()
 
     booking = ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex("^📝 Записаться$"), begin_booking)],
+        entry_points=[
+            MessageHandler(filters.Regex("^📝 Записаться$"), begin_booking)
+        ],
         states={
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
             SERVICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_service)],
@@ -661,7 +822,9 @@ def main():
     )
 
     reschedule = ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex("^🔁 Перенести \\d+$"), start_reschedule)],
+        entry_points=[
+            MessageHandler(filters.Regex("^🔁 Перенести \\d+$"), start_reschedule)
+        ],
         states={
             RESCHEDULE_DAY: [MessageHandler(filters.TEXT & ~filters.COMMAND, reschedule_day)],
             RESCHEDULE_TIME: [MessageHandler(filters.TEXT & ~filters.COMMAND, reschedule_time)],
@@ -676,12 +839,13 @@ def main():
     app.add_handler(reschedule)
 
     app.add_handler(MessageHandler(filters.Regex("^📋 Мои записи$"), show_my_records))
+
     app.add_handler(
-    MessageHandler(
-        filters.TEXT & ~filters.COMMAND & filters.User(user_id=ADMIN_IDS),
-        admin_buttons
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND & filters.User(user_id=ADMIN_IDS),
+            admin_buttons
+        )
     )
-)
 
     print("Бот работает...")
     app.run_polling()
