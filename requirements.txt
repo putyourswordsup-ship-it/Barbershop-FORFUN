@@ -1,3 +1,8 @@
+<<<<<<< HEAD
 python-telegram-bot[job-queue]
 flask
 apscheduler
+=======
+python-telegram-bot
+flask
+>>>>>>> 270d997a17ec4b06123d37ead0d6285ba12bab28
