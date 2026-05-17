@@ -21,7 +21,8 @@ from telegram.ext import (
 
 TOKEN = os.getenv("TOKEN")
 
-
+if not TOKEN:
+    TOKEN = "8581581631:AAHrWbATdQImh6svUHfikwVeKVK9pCXZBWs"
 
 ADMIN_IDS = [1288830602]
 ADMIN_PASSWORD = "1234"
@@ -498,7 +499,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
 
-    
+    await update.message.reply_text(
+        "👋 Вітаємо!\n\n"
+        "Обери дію:",
+        reply_markup=main_menu_kb()
+    )
     await update.message.reply_text(
         "Привіт! Обери дію:",
         reply_markup=main_menu_kb()
@@ -2838,7 +2843,7 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel)],
     )
 
-    app.add_handler(CommandHandler("start", start))
+    
     app.add_handler(CommandHandler("cancel", cancel))
 
     app.add_handler(booking)
