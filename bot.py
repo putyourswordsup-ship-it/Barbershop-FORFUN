@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 import os
 import threading
 import sqlite3
@@ -499,11 +499,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
 
-    await update.message.reply_text(
-        "👋 Вітаємо!\n\n"
-        "Обери дію:",
-        reply_markup=main_menu_kb()
-    )
+    
     await update.message.reply_text(
         "Привіт! Обери дію:",
         reply_markup=main_menu_kb()
@@ -1945,7 +1941,7 @@ def main():
     app.add_handler(CommandHandler("cancel", cancel))
     
     
-    app.add_handler(CommandHandler("cancel", cancel))
+   
 
     app.add_handler(booking)
     app.add_handler(reschedule)
@@ -2864,4 +2860,4 @@ def main():
 
 if __name__ == "__main__":
     main()
->>>>>>> 270d997a17ec4b06123d37ead0d6285ba12bab28
+
