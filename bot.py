@@ -7,7 +7,8 @@ from datetime import datetime, timedelta
 from collections import Counter
 
 
-from flask import Flask, app
+
+from flask import Flask
 
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
@@ -24,11 +25,11 @@ TOKEN = os.getenv("TOKEN")
 
 
 ADMIN_IDS = [1288830602]
-ADMIN_PASSWORD = "1234"
+ADMIN_PASSWORD = "876543210"
 
 DB_FILE = "barbershop.db"
 
-NAME, SERVICE, MASTER, DAY, TIME, COMMENT, CONFIRM, RESCHEDULE_DAY, RESCHEDULE_TIME, CONTACT_ADMIN, ADMIN_REPLY = range(11)
+NAME, SERVICE, MASTER, DAY, TIME, COMMENT, CONFIRM, RESCHEDULE_DAY, RESCHEDULE_TIME, CONTACT_ADMIN, ADMIN_REPLY, ADMIN_CANCEL_COMMENT = range(12)
 
 
 
@@ -481,6 +482,10 @@ def get_free_times(master, day, exclude_id=None):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
+
+    await update.message.reply_text(
+        f"Ваш Telegram ID: {user_id}"
+    )
 
     if is_admin(user_id):
         if is_admin_logged(context):
@@ -1086,6 +1091,73 @@ async def send_admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     return ConversationHandler.END
 
+async def admin_cancel_comment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+
+    if text == "⬅️ Назад":
+        context.user_data.pop("admin_cancel_record_id", None)
+
+        await update.message.reply_text(
+            "⚙️ Адмін-панель:",
+            reply_markup=admin_kb()
+        )
+        return ConversationHandler.END
+
+    record_id = context.user_data.get("admin_cancel_record_id")
+
+    if not record_id:
+        await update.message.reply_text(
+            "Запис не знайдено.",
+            reply_markup=admin_kb()
+        )
+        return ConversationHandler.END
+
+    record = get_record(record_id)
+
+    if not record:
+        await update.message.reply_text(
+            "Запис вже видалено.",
+            reply_markup=admin_kb()
+        )
+        return ConversationHandler.END
+
+    record_id, user_id, name, service, master, date, time, comment = record
+
+    if text == "Без коментаря":
+        admin_comment = "Без коментаря"
+    else:
+        admin_comment = text.strip()
+
+    delete_record(record_id)
+
+    try:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=(
+                f"❌ Ваш запис скасовано адміністратором.\n\n"
+                f"💈 Послуга: {service}\n"
+                f"👤 Майстер: {master}\n"
+                f"📅 Дата: {date}\n"
+                f"🕒 Час: {time}\n\n"
+                f"💬 Коментар адміністратора:\n"
+                f"{admin_comment}"
+            ),
+            reply_markup=kb([
+                [f"💬 Зв'язатися з адміністратором"]
+            ])
+        )
+    except Exception as e:
+        print(f"Помилка повідомлення клієнта про скасування: {e}")
+
+    context.user_data.pop("admin_cancel_record_id", None)
+
+    await update.message.reply_text(
+        "✅ Запис скасовано, клієнту відправлено повідомлення.",
+        reply_markup=admin_kb()
+    )
+
+    return ConversationHandler.END
+
 async def cancel_user_record(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user_id = update.message.from_user.id
@@ -1250,45 +1322,89 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(user_id) or not is_admin_logged(context):
         return
 
+    if context.user_data.get("admin_cancel_record_id"):
+        if text == "⬅️ Назад":
+            context.user_data.pop("admin_cancel_record_id", None)
+
+            await update.message.reply_text(
+                "⚙️ Адмін-панель:",
+                reply_markup=admin_kb()
+            )
+            return
+
+        record_id = context.user_data.get("admin_cancel_record_id")
+        record = get_record(record_id)
+
+        if not record:
+            context.user_data.pop("admin_cancel_record_id", None)
+
+            await update.message.reply_text(
+                "Запис вже видалено.",
+                reply_markup=admin_kb()
+            )
+            return
+
+        record_id, client_id, name, service, master, date, time, comment = record
+
+        if text == "Без коментаря":
+            admin_comment = "Без коментаря"
+        else:
+            admin_comment = text.strip()
+
+        delete_record(record_id)
+
+        try:
+            await context.bot.send_message(
+                chat_id=client_id,
+                text=(
+                    f"❌ Ваш запис скасовано адміністратором.\n\n"
+                    f"💈 Послуга: {service}\n"
+                    f"👤 Майстер: {master}\n"
+                    f"📅 Дата: {date}\n"
+                    f"🕒 Час: {time}\n\n"
+                    f"💬 Коментар адміністратора:\n"
+                    f"{admin_comment}"
+                ),
+                reply_markup=kb([
+                    ["💬 Зв'язатися з адміністратором"]
+                ])
+            )
+        except Exception as e:
+            print(f"Помилка повідомлення клієнта: {e}")
+
+        context.user_data.pop("admin_cancel_record_id", None)
+
+        await update.message.reply_text(
+            "✅ Запис скасовано, клієнту відправлено повідомлення.",
+            reply_markup=admin_kb()
+        )
+        return
+
     if context.user_data.get("waiting_new_service"):
         if text == "⬅️ Назад":
             context.user_data["waiting_new_service"] = False
-
-            await update.message.reply_text(
-                "⚙️ Налаштування:",
-                reply_markup=admin_kb()
-            )
+            await update.message.reply_text("⚙️ Налаштування:", reply_markup=admin_kb())
             return
 
         parts = text.split(" | ")
 
         if len(parts) != 3:
             await update.message.reply_text(
-                "Невірний формат.\n\n"
-                "Пиши так:\n"
-                "Стрижка | 500 грн | 45 хв"
+                "Невірний формат.\n\nПиши так:\nСтрижка | 500 грн | 45 хв"
             )
             return
 
         name, price, duration = parts
-
         add_service(name, price, duration)
         context.user_data["waiting_new_service"] = False
 
-        await update.message.reply_text(
-            "✅ Послуга додана.",
-            reply_markup=admin_kb()
-        )
+        await update.message.reply_text("✅ Послуга додана.", reply_markup=admin_kb())
         return
 
     if context.user_data.get("waiting_new_master"):
         if text == "⬅️ Назад":
             context.user_data["waiting_new_master"] = False
-
-            await update.message.reply_text(
-                "⚙️ Налаштування:",
-                reply_markup=admin_kb()
-            )
+            await update.message.reply_text("⚙️ Налаштування:", reply_markup=admin_kb())
             return
 
         master_name = text.strip()
@@ -1300,34 +1416,24 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         add_master(master_name)
         context.user_data["waiting_new_master"] = False
 
-        await update.message.reply_text(
-            "✅ Майстра додано.",
-            reply_markup=admin_kb()
-        )
+        await update.message.reply_text("✅ Майстра додано.", reply_markup=admin_kb())
         return
 
     if context.user_data.get("waiting_new_schedule"):
         if text == "⬅️ Назад":
             context.user_data["waiting_new_schedule"] = False
-
-            await update.message.reply_text(
-                "⚙️ Налаштування:",
-                reply_markup=admin_kb()
-            )
+            await update.message.reply_text("⚙️ Налаштування:", reply_markup=admin_kb())
             return
 
         parts = text.split(" | ")
 
         if len(parts) != 3:
             await update.message.reply_text(
-                "Невірний формат.\n\n"
-                "Пиши так:\n"
-                "Артем | 12.05.2026 | 14:00"
+                "Невірний формат.\n\nПиши так:\nАртем | 12.05.2026 | 14:00"
             )
             return
 
         master, date, time = parts
-
         master = master.strip()
         date = date.strip()
         time = time.strip()
@@ -1343,44 +1449,64 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         add_schedule(master, date, time)
         context.user_data["waiting_new_schedule"] = False
 
-        await update.message.reply_text(
-            "✅ Розклад додано.",
-            reply_markup=admin_kb()
-        )
+        await update.message.reply_text("✅ Розклад додано.", reply_markup=admin_kb())
         return
 
     records = get_all_records()
 
     if text == "📋 Список записів":
         if not records:
-            await update.message.reply_text(
-                "Записів немає.",
-                reply_markup=admin_kb()
-            )
+            await update.message.reply_text("Записів немає.", reply_markup=admin_kb())
             return
 
         message = "📋 Всі записи:\n\n"
 
         for r in records:
-            if len(r) == 8:
-                record_id, _, name, service, master, date, time, comment = r
-            else:
-                record_id, _, name, service, master, date, time = r
-                comment = None
-
+            record_id, _, name, service, master, date, time, comment = r
             message += f"{record_id}. {name} | {service} | {master} | {date} | {time}\n"
 
+        await update.message.reply_text(message, reply_markup=admin_kb())
+
+    elif text == "❌ Видалити запис":
+        if not records:
+            await update.message.reply_text("Записів немає.", reply_markup=admin_kb())
+            return
+
+        keyboard = [[f"❌ Запис {r[0]}"] for r in records]
+        keyboard.append(["⬅️ Назад"])
+
         await update.message.reply_text(
-            message,
-            reply_markup=admin_kb()
+            "Обери запис для скасування:",
+            reply_markup=kb(keyboard)
         )
+
+    elif text.startswith("❌ Запис "):
+        try:
+            record_id = int(text.split()[-1])
+        except ValueError:
+            await update.message.reply_text("Помилка видалення.", reply_markup=admin_kb())
+            return
+
+        record = get_record(record_id)
+
+        if not record:
+            await update.message.reply_text("Запис не знайдено.", reply_markup=admin_kb())
+            return
+
+        context.user_data["admin_cancel_record_id"] = record_id
+
+        await update.message.reply_text(
+            "Напиши причину скасування для клієнта або натисни 'Без коментаря':",
+            reply_markup=kb([
+                ["Без коментаря"],
+                ["⬅️ Назад"]
+            ])
+        )
+        return
 
     elif text == "📊 Аналітика":
         if not records:
-            await update.message.reply_text(
-                "Аналітики поки немає.",
-                reply_markup=admin_kb()
-            )
+            await update.message.reply_text("Аналітики поки немає.", reply_markup=admin_kb())
             return
 
         now = datetime.now()
@@ -1389,64 +1515,38 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         normalized_records = []
 
         for r in records:
-            if len(r) == 8:
-                record_id, client_id, name, service, master, date, time, comment = r
-            else:
-                record_id, client_id, name, service, master, date, time = r
-                comment = None
+            record_id, client_id, name, service, master, date, time, comment = r
 
             try:
                 record_datetime = get_next_record_datetime(date, time)
             except ValueError:
                 continue
 
-            normalized_records.append(
-                {
-                    "id": record_id,
-                    "client_id": client_id,
-                    "name": name,
-                    "service": service,
-                    "master": master,
-                    "date": date,
-                    "time": time,
-                    "comment": comment,
-                    "datetime": record_datetime
-                }
-            )
+            normalized_records.append({
+                "id": record_id,
+                "client_id": client_id,
+                "name": name,
+                "service": service,
+                "master": master,
+                "date": date,
+                "time": time,
+                "comment": comment,
+                "datetime": record_datetime
+            })
 
         if not normalized_records:
-            await update.message.reply_text(
-                "Аналітики поки немає.",
-                reply_markup=admin_kb()
-            )
+            await update.message.reply_text("Аналітики поки немає.", reply_markup=admin_kb())
             return
 
-        normalized_records = sorted(
-            normalized_records,
-            key=lambda r: r["datetime"]
-        )
-
-        today_records = [
-            r for r in normalized_records
-            if r["date"] == today_str
-        ]
+        normalized_records = sorted(normalized_records, key=lambda r: r["datetime"])
+        today_records = [r for r in normalized_records if r["date"] == today_str]
 
         masters_counter = Counter(r["master"] for r in normalized_records)
         services_counter = Counter(r["service"] for r in normalized_records)
         dates_counter = Counter(r["date"] for r in normalized_records)
 
-        sorted_masters = sorted(
-            masters_counter.items(),
-            key=lambda x: x[1],
-            reverse=True
-        )
-
-        sorted_services = sorted(
-            services_counter.items(),
-            key=lambda x: x[1],
-            reverse=True
-        )
-
+        sorted_masters = sorted(masters_counter.items(), key=lambda x: x[1], reverse=True)
+        sorted_services = sorted(services_counter.items(), key=lambda x: x[1], reverse=True)
         sorted_dates = sorted(
             dates_counter.items(),
             key=lambda x: get_next_record_datetime(x[0], "00:00")
@@ -1460,7 +1560,6 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             nearest_text = f"{nearest_record['date']} о {nearest_record['time']}"
 
         message = "📊 Аналітика\n\n"
-
         message += "━━━━━━━━━━━━━━\n"
         message += "📌 Загалом\n"
         message += f"• Активних записів: {len(normalized_records)}\n"
@@ -1511,74 +1610,24 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for date, count in sorted_dates[:7]:
             message += f"• {date} — {count} записи\n"
 
-        await update.message.reply_text(
-            message,
-            reply_markup=admin_kb()
-        )
+        await update.message.reply_text(message, reply_markup=admin_kb())
 
     elif text == "🕒 Зайняті слоти":
         if not records:
-            await update.message.reply_text(
-                "Зайнятих слотів немає.",
-                reply_markup=admin_kb()
-            )
+            await update.message.reply_text("Зайнятих слотів немає.", reply_markup=admin_kb())
             return
 
         message = "🕒 Зайняті слоти:\n\n"
 
         for r in records:
-            if len(r) == 8:
-                record_id, _, name, service, master, date, time, comment = r
-            else:
-                record_id, _, name, service, master, date, time = r
-
+            record_id, _, name, service, master, date, time, comment = r
             message += f"{record_id}. {master} — {date} {time} ({service})\n"
 
-        await update.message.reply_text(
-            message,
-            reply_markup=admin_kb()
-        )
-
-    elif text == "❌ Видалити запис":
-        if not records:
-            await update.message.reply_text(
-                "Записів немає.",
-                reply_markup=admin_kb()
-            )
-            return
-
-        keyboard = [[f"❌ Запис {r[0]}"] for r in records]
-        keyboard.append(["⬅️ Назад"])
-
-        await update.message.reply_text(
-            "Обери запис для видалення:",
-            reply_markup=kb(keyboard)
-        )
-
-    elif text.startswith("❌ Запис "):
-        try:
-            record_id = int(text.split()[-1])
-        except ValueError:
-            await update.message.reply_text(
-                "Помилка видалення.",
-                reply_markup=admin_kb()
-            )
-            return
-
-        delete_record(record_id)
-
-        await update.message.reply_text(
-            "✅ Запис видалено.",
-            reply_markup=admin_kb()
-        )
+        await update.message.reply_text(message, reply_markup=admin_kb())
 
     elif text == "🧹 Очистити все":
         clear_records()
-
-        await update.message.reply_text(
-            "🧹 Всі записи видалено.",
-            reply_markup=admin_kb()
-        )
+        await update.message.reply_text("🧹 Всі записи видалено.", reply_markup=admin_kb())
 
     elif text == "⚙️ Налаштування":
         await update.message.reply_text(
@@ -1606,10 +1655,7 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         services = get_services()
 
         if not services:
-            await update.message.reply_text(
-                "Послуг поки що немає.",
-                reply_markup=admin_kb()
-            )
+            await update.message.reply_text("Послуг поки що немає.", reply_markup=admin_kb())
             return
 
         message = "💈 Послуги:\n\n"
@@ -1618,10 +1664,7 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             service_id, name, price, duration = service
             message += f"{service_id}. {name} | {price} | {duration}\n"
 
-        await update.message.reply_text(
-            message,
-            reply_markup=admin_kb()
-        )
+        await update.message.reply_text(message, reply_markup=admin_kb())
 
     elif text == "➕ Додати послугу":
         context.user_data["waiting_new_service"] = True
@@ -1638,10 +1681,7 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         services = get_services()
 
         if not services:
-            await update.message.reply_text(
-                "Послуг поки що немає.",
-                reply_markup=admin_kb()
-            )
+            await update.message.reply_text("Послуг поки що немає.", reply_markup=admin_kb())
             return
 
         keyboard = []
@@ -1666,10 +1706,7 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         delete_service(service_id)
 
-        await update.message.reply_text(
-            "✅ Послуга видалена.",
-            reply_markup=admin_kb()
-        )
+        await update.message.reply_text("✅ Послуга видалена.", reply_markup=admin_kb())
 
     elif text == "👤 Майстри":
         await update.message.reply_text(
@@ -1686,10 +1723,7 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         masters = get_masters()
 
         if not masters:
-            await update.message.reply_text(
-                "Майстрів поки що немає.",
-                reply_markup=admin_kb()
-            )
+            await update.message.reply_text("Майстрів поки що немає.", reply_markup=admin_kb())
             return
 
         message = "👤 Майстри:\n\n"
@@ -1698,10 +1732,7 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             master_id, name = master
             message += f"{master_id}. {name}\n"
 
-        await update.message.reply_text(
-            message,
-            reply_markup=admin_kb()
-        )
+        await update.message.reply_text(message, reply_markup=admin_kb())
 
     elif text == "➕ Додати майстра":
         context.user_data["waiting_new_master"] = True
@@ -1717,10 +1748,7 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         masters = get_masters()
 
         if not masters:
-            await update.message.reply_text(
-                "Майстрів поки що немає.",
-                reply_markup=admin_kb()
-            )
+            await update.message.reply_text("Майстрів поки що немає.", reply_markup=admin_kb())
             return
 
         keyboard = []
@@ -1745,10 +1773,7 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         delete_master(master_id)
 
-        await update.message.reply_text(
-            "✅ Майстер видалений.",
-            reply_markup=admin_kb()
-        )
+        await update.message.reply_text("✅ Майстер видалений.", reply_markup=admin_kb())
 
     elif text == "📅 Розклад":
         await update.message.reply_text(
@@ -1765,10 +1790,7 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         schedule = get_schedule()
 
         if not schedule:
-            await update.message.reply_text(
-                "Розкладу поки що немає.",
-                reply_markup=admin_kb()
-            )
+            await update.message.reply_text("Розкладу поки що немає.", reply_markup=admin_kb())
             return
 
         message = "📅 Розклад:\n\n"
@@ -1777,10 +1799,7 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             schedule_id, master, date, time = item
             message += f"{schedule_id}. {master} | {date} | {time}\n"
 
-        await update.message.reply_text(
-            message,
-            reply_markup=admin_kb()
-        )
+        await update.message.reply_text(message, reply_markup=admin_kb())
 
     elif text == "➕ Додати розклад":
         context.user_data["waiting_new_schedule"] = True
@@ -1797,10 +1816,7 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         schedule = get_schedule()
 
         if not schedule:
-            await update.message.reply_text(
-                "Розкладу поки що немає.",
-                reply_markup=admin_kb()
-            )
+            await update.message.reply_text("Розкладу поки що немає.", reply_markup=admin_kb())
             return
 
         keyboard = []
@@ -1825,16 +1841,10 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         delete_schedule(schedule_id)
 
-        await update.message.reply_text(
-            "✅ Розклад видалений.",
-            reply_markup=admin_kb()
-        )
+        await update.message.reply_text("✅ Розклад видалений.", reply_markup=admin_kb())
 
     elif text == "⬅️ Назад":
-        await update.message.reply_text(
-            "⚙️ Адмін-панель:",
-            reply_markup=admin_kb()
-        )
+        await update.message.reply_text("⚙️ Адмін-панель:", reply_markup=admin_kb())
 
     elif text == "🚪 Вийти з адмінки":
         context.user_data["admin_logged"] = False
