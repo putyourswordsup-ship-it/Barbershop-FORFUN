@@ -524,10 +524,8 @@ def get_free_times(master, day, exclude_id=None):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
 
-    await update.message.reply_text(
-        f"Ваш Telegram ID: {user_id}"
-    )
-
+    print(f"NEW USER: {update.message.from_user.full_name} | ID: {user_id}")
+    
     if is_admin(user_id):
         if is_admin_logged(context):
             await update.message.reply_text(
