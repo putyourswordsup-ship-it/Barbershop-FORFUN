@@ -64,7 +64,7 @@ def contacts_kb():
     return kb([
         ["📍 Адреса"],
         ["📞 Зателефонувати"],
-        ["📸 Instagram"],
+        ["🌐 Соцмережі"],
         ["⬅️ Назад в меню"]
     ])
 
@@ -110,6 +110,24 @@ CREATE TABLE IF NOT EXISTS appointments (
     time TEXT
 )
 """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+)
+""")
+
+    default_settings = {
+    "phone": "+380 99 123 45 67",
+    "address": "м. Київ, вул. Прикладна 10",
+    "socials": "Instagram: @your_barbershop\nFacebook: -\nTikTok: -\nTelegram: -"
+}
+
+    for key, value in default_settings.items():
+        cur.execute(
+        "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+        (key, value)
+    )
 
     cur.execute("SELECT COUNT(*) FROM masters")
     masters_count = cur.fetchone()[0]
@@ -417,6 +435,29 @@ def delete_schedule(schedule_id):
     conn.commit()
     conn.close()
 
+def get_setting(key):
+    conn = sqlite3.connect(DB_FILE)
+    cur = conn.cursor()
+
+    cur.execute("SELECT value FROM settings WHERE key=?", (key,))
+    row = cur.fetchone()
+
+    conn.close()
+
+    return row[0] if row else ""
+
+
+def set_setting(key, value):
+    conn = sqlite3.connect(DB_FILE)
+    cur = conn.cursor()
+
+    cur.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+        (key, value)
+    )
+
+    conn.commit()
+    conn.close()
 
 def get_master_dates_from_db(master):
     conn = sqlite3.connect(DB_FILE)
@@ -523,33 +564,30 @@ async def contact_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == "📍 Адреса":
         await update.message.reply_text(
-            "📍 Адреса:\n"
-            "ул. Примерная 10, Киев"
+            f"📍 Адреса:\n{get_setting('address')}"
         )
 
     elif text == "📞 Зателефонувати":
         await update.message.reply_text(
-            "📞 Телефон:\n"
-            "+380 99 123 45 67"
+            f"📞 Телефон:\n{get_setting('phone')}"
         )
 
-    elif text == "📸 Instagram":
+    elif text == "🌐 Соцмережі":
         await update.message.reply_text(
-            "📸 Instagram:\n"
-            "@your_barbershop"
+            f"🌐 Соцмережі:\n{get_setting('socials')}"
         )
 
     elif text == "⬅️ Назад в меню":
         if is_admin(update.message.from_user.id) and is_admin_logged(context):
             await update.message.reply_text(
-            "⚙️ Адмін-панель:",
-            reply_markup=admin_kb()
-        )
+                "⚙️ Адмін-панель:",
+                reply_markup=admin_kb()
+            )
         else:
             await update.message.reply_text(
-            "Головне меню:",
-            reply_markup=main_menu_kb()
-        )
+                "Головне меню:",
+                reply_markup=main_menu_kb()
+            )
 
 async def begin_booking(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
@@ -1321,7 +1359,28 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not is_admin(user_id) or not is_admin_logged(context):
         return
+    
+    if context.user_data.get("waiting_setting"):
+        setting_key = context.user_data["waiting_setting"]
 
+        if text == "⬅️ Назад":
+            context.user_data.pop("waiting_setting", None)
+
+            await update.message.reply_text(
+                "⚙️ Адмін-панель:",
+                reply_markup=admin_kb()
+            )
+            return
+
+        set_setting(setting_key, text)
+        context.user_data.pop("waiting_setting", None)
+
+        await update.message.reply_text(
+            "✅ Дані оновлено.",
+            reply_markup=admin_kb()
+        )
+        return
+    
     if context.user_data.get("admin_cancel_record_id"):
         if text == "⬅️ Назад":
             context.user_data.pop("admin_cancel_record_id", None)
@@ -1636,6 +1695,7 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ["💈 Послуги"],
                 ["👤 Майстри"],
                 ["📅 Розклад"],
+                ["🌐 Контакти та соцмережі"],
                 ["⬅️ Назад"]
             ])
         )
@@ -1846,6 +1906,45 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "⬅️ Назад":
         await update.message.reply_text("⚙️ Адмін-панель:", reply_markup=admin_kb())
 
+    elif text == "🌐 Контакти та соцмережі":
+        await update.message.reply_text(
+            "🌐 Керування контактами:",
+            reply_markup=kb([
+                ["📞 Змінити номер"],
+                ["📍 Змінити адресу"],
+                ["🌐 Змінити соцмережі"],
+                ["⬅️ Назад"]
+            ])
+        )
+
+    elif text == "📞 Змінити номер":
+        context.user_data["waiting_setting"] = "phone"
+
+        await update.message.reply_text(
+            "Напиши новий номер телефону:",
+            reply_markup=back_kb([])
+        )
+
+    elif text == "📍 Змінити адресу":
+        context.user_data["waiting_setting"] = "address"
+
+        await update.message.reply_text(
+            "Напиши нову адресу:",
+            reply_markup=back_kb([])
+        )
+
+    elif text == "🌐 Змінити соцмережі":
+        context.user_data["waiting_setting"] = "socials"
+
+        await update.message.reply_text(
+            "Напиши соцмережі в форматі:\n\n"
+            "Instagram: @name\n"
+            "Facebook: link\n"
+            "TikTok: @name\n"
+            "Telegram: @name",
+            reply_markup=back_kb([])
+        )
+
     elif text == "🚪 Вийти з адмінки":
         context.user_data["admin_logged"] = False
 
@@ -1985,7 +2084,7 @@ def main():
 
     app.add_handler(
     MessageHandler(
-        filters.Regex("^(📍 Адреса|📞 Зателефонувати|📸 Instagram|⬅️ Назад в меню)$"),
+        filters.Regex("^(📍 Адреса|📞 Зателефонувати|🌐 Соцмережі|⬅️ Назад в меню)$")
         contact_buttons
     )
 )
