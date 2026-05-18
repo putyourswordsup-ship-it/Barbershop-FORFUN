@@ -2084,7 +2084,7 @@ def main():
 
     app.add_handler(
     MessageHandler(
-        filters.Regex("^(📍 Адреса|📞 Зателефонувати|🌐 Соцмережі|⬅️ Назад в меню)$")
+        filters.Regex("^(📍 Адреса|📞 Зателефонувати|🌐 Соцмережі|⬅️ Назад в меню)$"),
         contact_buttons
     )
 )
