@@ -1502,7 +1502,7 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ["⬅️ Назад"]
             ])
         )
-        return
+        return ADMIN_CANCEL_COMMENT
 
     elif text == "📊 Аналітика":
         if not records:
@@ -1991,11 +1991,25 @@ def main():
 )
 
     app.add_handler(
-        MessageHandler(
-            filters.TEXT & ~filters.COMMAND & filters.User(user_id=ADMIN_IDS),
-            admin_buttons
-        )
+        ConversationHandler(
+            entry_points=[
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND & filters.User(user_id=ADMIN_IDS),
+                    admin_buttons
+                )
+        ],
+        states={
+            ADMIN_CANCEL_COMMENT: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    admin_cancel_comment
+                )
+            ]
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+        per_message=False
     )
+)
 
     
     print("Бот работает...")
