@@ -713,7 +713,8 @@ async def get_master(update: Update, context: ContextTypes.DEFAULT_TYPE):
             photo=master_info["photo"],
             caption=master_info["description"]
         )
-        except Exception:
+        except Exception as e:
+            print(f"Помилка фото майстра: {e}")
             await update.message.reply_text(master_info["description"])
 
     dates = get_master_dates_from_db(master)
