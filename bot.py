@@ -37,7 +37,7 @@ MASTER_INFO = {
         "description": "👤 Даня\n💈 Барбер\n⭐️ Досвід: 3 роки\n✂️ Спеціалізація: чоловічі стрижки, борода"
     },
     "Максим": {
-        "photo": "https://i.postimg.cc/YCwD356J/barber-max.jpg",
+        "photo": "https://i.postimg.cc/YSrWb0Lc/barber-artem.jpg",
         "description": "👤 Максим\n💈 Барбер\n⭐️ Досвід: 4 роки\n✂️ Спеціалізація: класика, fade"
     },
 }
