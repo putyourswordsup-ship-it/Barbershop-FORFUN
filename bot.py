@@ -538,6 +538,8 @@ def get_free_times(master, day, exclude_id=None):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
+    
+    context.user_data.clear()
 
     print(f"NEW USER: {update.message.from_user.full_name} | ID: {user_id}")
     
