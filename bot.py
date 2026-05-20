@@ -58,7 +58,6 @@ def back_kb(buttons):
 
 def main_menu_kb():
     return kb([
-        ["🚀 Почати"],
         ["📝 Записатися"],
         ["📋 Мої записи"],
         ["💬 Зв'язатися з адміністратором"],
@@ -2201,9 +2200,7 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel)],
     )
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(
-        MessageHandler(filters.Regex("^🚀 Почати$"), start)
-    )
+   
     app.add_handler(CommandHandler("cancel", cancel))
     
     
