@@ -1781,7 +1781,7 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(message, reply_markup=admin_kb())
 
-    elif text == "🕒 Зайняті слоти":
+    elif text in ["🕘 Заняті слоти", "🕒 Зайняті слоти"]:
         if not records:
             await update.message.reply_text("Зайнятих слотів немає.", reply_markup=admin_kb())
             return
