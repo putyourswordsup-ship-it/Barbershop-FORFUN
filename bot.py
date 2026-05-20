@@ -27,6 +27,21 @@ TOKEN = os.getenv("TOKEN")
 ADMIN_IDS = [1288830602]
 ADMIN_PASSWORD = "876543210"
 
+MASTER_INFO = {
+    "Артем": {
+        "photo": "https://i.postimg.cc/YSrWb0Lc/barber-artem.jpg",
+        "description": "👤 Артем\n💈 Барбер\n⭐️ Досвід: 5 років\n✂️ Спеціалізація: стрижки, fade, борода"
+    },
+    "Даня": {
+        "photo": "https://i.postimg.cc/1Rfd5cRk/barber-dan.jpg",
+        "description": "👤 Даня\n💈 Барбер\n⭐️ Досвід: 3 роки\n✂️ Спеціалізація: чоловічі стрижки, борода"
+    },
+    "Максим": {
+        "photo": "https://i.postimg.cc/YCwD356J/barber-max.jpg",
+        "description": "👤 Максим\n💈 Барбер\n⭐️ Досвід: 4 роки\n✂️ Спеціалізація: класика, fade"
+    },
+}
+
 DB_FILE = "barbershop.db"
 
 NAME, SERVICE, MASTER, DAY, TIME, COMMENT, CONFIRM, RESCHEDULE_DAY, RESCHEDULE_TIME, CONTACT_ADMIN, ADMIN_REPLY, ADMIN_CANCEL_COMMENT = range(12)
@@ -54,7 +69,7 @@ def main_menu_kb():
 def admin_kb():
     return kb([
         ["📋 Список записів", "📊 Аналітика"],
-        ["🕒 Зайняті слоти"],
+        ["🕒 Заняті слоти"],
         ["❌ Видалити запис", "🧹 Очистити все"],
         ["⚙️ Налаштування"],
         ["🚪 Вийти з адмінки"],
@@ -64,7 +79,7 @@ def contacts_kb():
     return kb([
         ["📍 Адреса"],
         ["📞 Зателефонувати"],
-        ["🌐 Соцмережі"],
+        ["🌐 Соціальні мережі"],
         ["⬅️ Назад в меню"]
     ])
 
@@ -688,6 +703,16 @@ async def get_master(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return MASTER
 
     context.user_data["master"] = master
+    master_info = MASTER_INFO.get(master)
+
+    if master_info:
+        try:
+            await update.message.reply_photo(
+            photo=master_info["photo"],
+            caption=master_info["description"]
+        )
+        except Exception:
+            await update.message.reply_text(master_info["description"])
 
     dates = get_master_dates_from_db(master)
 
