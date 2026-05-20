@@ -116,6 +116,13 @@ CREATE TABLE IF NOT EXISTS appointments (
         name TEXT UNIQUE
     )
     """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS master_profiles (
+        master TEXT PRIMARY KEY,
+        photo TEXT,
+        description TEXT
+    )
+    """)
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS schedule (
@@ -474,6 +481,42 @@ def set_setting(key, value):
     conn.commit()
     conn.close()
 
+def get_master_profile(master):
+    conn = sqlite3.connect(DB_FILE)
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT photo, description FROM master_profiles WHERE master=?",
+        (master,)
+    )
+
+    row = cur.fetchone()
+    conn.close()
+
+    if row:
+        return {
+            "photo": row[0],
+            "description": row[1]
+        }
+
+    return MASTER_INFO.get(master)
+
+
+def set_master_profile(master, photo, description):
+    conn = sqlite3.connect(DB_FILE)
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        INSERT OR REPLACE INTO master_profiles (master, photo, description)
+        VALUES (?, ?, ?)
+        """,
+        (master, photo, description)
+    )
+
+    conn.commit()
+    conn.close()
+
 def get_master_dates_from_db(master):
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
@@ -705,7 +748,7 @@ async def get_master(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return MASTER
 
     context.user_data["master"] = master
-    master_info = MASTER_INFO.get(master)
+    master_info = get_master_profile(master)
 
     if master_info:
         try:
@@ -1407,6 +1450,47 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
+    if context.user_data.get("waiting_master_profile"):
+        master = context.user_data["waiting_master_profile"]
+
+        if text == "⬅️ Назад":
+            context.user_data.pop("waiting_master_profile", None)
+
+            await update.message.reply_text(
+                "⚙️ Адмін-панель:",
+                reply_markup=admin_kb()
+            )
+            return
+
+        if " | " not in text:
+            await update.message.reply_text(
+                "Невірний формат.\n\n"
+                "Пиши так:\n"
+                "посилання_на_фото | опис майстра"
+            )
+            return
+
+        photo, description = text.split(" | ", 1)
+
+        photo = photo.strip()
+        description = description.strip()
+
+        if not photo or not description:
+            await update.message.reply_text(
+                "Фото і опис не можуть бути порожніми."
+            )
+            return
+
+        set_master_profile(master, photo, description)
+
+        context.user_data.pop("waiting_master_profile", None)
+
+        await update.message.reply_text(
+            "✅ Фото та опис майстра оновлено.",
+            reply_markup=admin_kb()
+        )
+        return
+
     if context.user_data.get("admin_cancel_record_id"):
         if text == "⬅️ Назад":
             context.user_data.pop("admin_cancel_record_id", None)
@@ -1801,6 +1885,7 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ["📋 Список майстрів"],
                 ["➕ Додати майстра"],
                 ["❌ Видалити майстра"],
+                ["🖼 Змінити фото/опис майстра"],
                 ["⬅️ Назад"]
             ])
         )
@@ -1860,6 +1945,53 @@ async def admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         delete_master(master_id)
 
         await update.message.reply_text("✅ Майстер видалений.", reply_markup=admin_kb())
+
+    elif text == "🖼 Змінити фото/опис майстра":
+        masters = get_masters()
+
+        if not masters:
+            await update.message.reply_text(
+                "Майстрів поки що немає.",
+                reply_markup=admin_kb()
+            )
+            return
+
+        keyboard = []
+
+        for master in masters:
+            master_id, name = master
+            keyboard.append([f"🖼 Майстер {name}"])
+
+        keyboard.append(["⬅️ Назад"])
+
+        await update.message.reply_text(
+            "Обери майстра для редагування:",
+            reply_markup=kb(keyboard)
+        )
+
+    elif text.startswith("🖼 Майстер "):
+        master_name = text.replace("🖼 Майстер ", "").strip()
+
+        master_names = [m[1] for m in get_masters()]
+
+        if master_name not in master_names:
+            await update.message.reply_text(
+                "Майстра не знайдено.",
+                reply_markup=admin_kb()
+            )
+            return
+
+        context.user_data["waiting_master_profile"] = master_name
+
+        await update.message.reply_text(
+            "Надішли нове фото та опис в одному повідомленні:\n\n"
+            "посилання_на_фото | опис майстра\n\n"
+            "Приклад:\n"
+            "https://i.postimg.cc/example.jpg | 👤 Артем\n"
+            "💈 Барбер\n"
+            "⭐️ Досвід: 5 років",
+            reply_markup=back_kb([])
+        )
 
     elif text == "📅 Розклад":
         await update.message.reply_text(
